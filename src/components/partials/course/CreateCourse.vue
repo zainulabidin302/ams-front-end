@@ -3,22 +3,39 @@
     <div class="form-container">
       <h1>Course information</h1>
     <form action="" @submit.prevent="handleForm" ref="_course">
-      <input type="submit" value="Save Course" @click="saveCourse()">
-      <input type="submit" value="Delete Course" @click="deleteCourse()" class="delete-btn">
 
+      <input type="submit" :value="(update ? 'Update Course': 'Save Course' )" @click="saveCourse()" v-if="!loading['save']" />
+      <div v-if="error['save']" v-html="errorMessage['save']"></div>
+      <div v-if="success['save']" v-html="successMessage['save']"></div>
+
+      <!-- <input type="submit" value="Delete Course" @click="deleteCourse()" class="delete-btn"> -->
+      <div v-if="loading['save']" >
+          <img src="./../../../assets/loader.gif" style="width: 90px;height: 50px;">
+      </div>
       <div class="field">
         <label>
           Course Title <small>(required)</small>
         </label>
-        <input type="text" v-model="course.title" placeholder="Enter a short course title for example 'Anylisis of Algorithm'" >
+        <input type="text" 
+        @keyup="searchShow = true" @keydown="searchShow = true" @blur="onCourseBlur" 
+        v-model="course.title" placeholder="Enter a short course title for example 'Anylisis of Algorithm'" >
+        <div v-if="searchShow">
+        <div v-for="crs in filterdCourses">
+          <li style="background: gray; border: 1px solid white;color: white; list-style-type: none; padding: 10px; cursor: pointer;" @click="course.title = crs.courseTitle">{{crs.courseTitle}} (click to select)</li></br>
+        </div>
+        <div v-if="filterdCourses.length == 0">
+          <li style="background: gray; border: 1px solid white;color: white; list-style-type: none; padding: 10px; cursor: pointer;" @click="course.title = '*'">No Match, Click to show All or New Course will be created for your string.</li></br>
+        </div>
+        </div>
+        <hr>
       </div>
-      <div class="field" >
+      <!-- <div class="field" >
         <label >
           Additinoal Information 
         </label>
         <button  @click="additionalInformation = !additionalInformation" v-if="!additionalInformation">+</button>
         <button @click="additionalInformation = !additionalInformation" v-if="additionalInformation">-</button>
-      </div>
+      </div> -->
 
       <div class="field" v-if="additionalInformation" >
       <label >
@@ -34,18 +51,18 @@
         <input type="text" placeholder="Course Code makes it easy to identify the course." >
       </div>
 
-      <div class="field"  v-if="additionalInformation" >
-        <label >
-          Students <small><small>(List of students allowed to upload assignments)</small></small>
-        </label>
+      <div class="field"   >
+        <!-- <label >
+          Students <small><small>(List of students allowed to upload assignments, it should be in the format : <br>f123123@umt.edu.pk, 0300123123123\n</br> f123123@umt.edu.pk, 0300123123123\n <br> ...)</small></small>
+        </label> -->
         
-        <input type="text" placeholder="f123123@umt.edu.pk, hello@umt.edu.pk, ...." v-model="course.students">
+        <input type="hidden"  placeholder="f123123@umt.edu.pk, hello@umt.edu.pk, ...." v-model="course.students">
         <input type="file" @change="readFile">
-        <button @click="studentsCSVCollapsed = !studentsCSVCollapsed" v-if="studentsCSVCollapsed">+ (expand students list) </button>
+        <!-- <button @click="studentsCSVCollapsed = !studentsCSVCollapsed" v-if="studentsCSVCollapsed">+ (expand students list) </button> -->
         
       </div>
-      <div v-if="!studentsCSVCollapsed" class="field" >
-        <button @click="studentsCSVCollapsed = !studentsCSVCollapsed" v-if="!studentsCSVCollapsed">- (collapse)</button>
+      <div  class="field" >
+        <!-- <button @click="studentsCSVCollapsed = !studentsCSVCollapsed" v-if="!studentsCSVCollapsed">- (collapse)</button> -->
         <hr>
         <div v-if="studentsCSV.length == 0">
           No students are added.
@@ -54,7 +71,7 @@
         <div v-for="(studentEmail, studentIndex) in studentsCSV" >
           <div>
             <button @click="removeStudent(studentIndex)" class="delete-btn">x</button>
-            {{ studentIndex + 1 }}. {{studentEmail}} 
+            {{ studentIndex + 1 }} {{studentEmail}} 
           </div>
           
         </div>
@@ -129,6 +146,7 @@
           <div class="field" >
           <label >
             Deadline
+            {{assign.deadline}}
           <input checked="true" type="checkbox"><small><small>(allow submission after due date.)</small></small>
           </label>
           <div class="field-group">
@@ -151,8 +169,19 @@
             Attatchments <small><small>(You can select multiple files)</small></small>
           </label>
             <input type="file" :name="'files[' + assignmentIndex + ']'" multiple="multiple">
-          </div>
+
           
+          </div>
+          <div v-if="update">
+            
+            <div v-for="(att, attIndex) in assign.attatchments_existing" >
+              <a :href="domain + '/public/' + att.filename">
+                {{att.originalname}} - <small>({{att.size}})</small> {{att.mimetype}}
+              </a> 
+                <button @click="assign.attatchments_existing.splice(attIndex, 1)" class="delete-btn">x</button>
+
+              </div>
+          </div>
         </div>
 
 
@@ -171,6 +200,7 @@
 </template>
 
 <script>
+import config from '../../../config.js'
 function Model() {}
 Model.prototype.toJSON = function() {
   let opts = {};
@@ -198,11 +228,13 @@ Course.prototype = _model;
 
 function Assignment(options = {}) {
   // Model.call(this);
+  this._id = options._id || null;
   this.title = options.title || null;
   this.description = options.description || null;
   this.deadline = options.deadline || null;
   this.body = options.body || null;
-  this.attatchments = options.attatchments || null;
+  this.attatchments_existing = options.attatchments_existing || null;
+  this.attatchments = options.attatchments || [];
   this.collapsed = false;
   this.additional_information = false;
 }
@@ -216,11 +248,78 @@ export default {
       course,
       studentsCSVCollapsed: true,
       newStudentEmail: null,
+      searchShow: false,
+      additionalInformation: false,
+      domain : config.apiServer,
+      coursesTitles: [],
 
-      additionalInformation: false
+      errorMessage: {
+        'save': 'Can not save'
+      },
+      error: {
+        'save': false,
+      },
+      loading: {
+        'save': false
+      },
+      success: {
+        'save': false,
+      },
+      successMessage: {
+        'save': '',
+      },
+
+      update: false,
+
     };
   },
+  
+  created() {
+    
+    if (this.$route.params.id) {
+      let _id = this.$route.params.id
+      this.fetchCourse(_id)
+      this.update = true
+    }
+
+    this.fetchCourses()
+  },
   methods: {
+    onCourseBlur() {
+      
+      setTimeout(() => {
+        this.searchShow = false;
+      },50)
+    },
+    fetchCourses() {
+      fetch(this.domain + "/courses/titles").then(r => r.json()).then(response => {
+        this.coursesTitles = response
+      }).catch(error => console.log(error))
+    },
+    fetchCourse(id) {
+      fetch(this.domain + "/course/" + id).then(r => r.json()).then(response => {
+      if (typeof(response) === 'object' && response instanceof Array && response.length > 0) {
+        let course = response[0]
+
+        let assignments = response.map(assign => {
+          return new Assignment(options = {
+            title: assign.title,
+            attatchments_existing: assign.files,
+            deadline: assign.deadline,
+            _id: assign._id
+          }).toJSON()
+        })
+        let options = {
+          title: course.courseTitle,
+          students: course.courseStudents.map(item => item.email + "," + item.phone).join('\n'),
+          course_email: course.courseEmail,
+          assignments: assignments
+
+        }
+        this.course = new Course(options).toJSON()
+      }
+      }).catch(error => console.log(error))
+    },
     handleForm() {},
     readFile(event) {
       var input = event.target;
@@ -230,7 +329,7 @@ export default {
         var text = reader.result;
         this.course.students = text;
       };
-      if (input.files[0].type == "text/csv") {
+      if (input.files[0].type == "text/plain") {
         reader.readAsText(input.files[0]);
       } else {
         alert("file must be csv of emails");
@@ -245,25 +344,43 @@ export default {
       this.course.assignments.splice(id, 1);
     },
     saveCourse() {
+      
       let formData = new FormData();
-      formData.set("title", this.course.title);
+      this.loading['save'] = true;
+      this.error['save'] = false;
+      this.success['save'] = false;
 
+      formData.set("course.title", this.course.title);
+      this.studentsCSV.map(item => item.split(",")).forEach(studentRecord => {
+        formData.append("course.students", studentRecord);
+      });
       this.course.assignments.forEach((item, idx) => {
         let fileInput = this.$refs._course.querySelector(
           "input[name='files[" + idx + "]']"
         );
-        // console.log(fileInput.files);
-
-        for (let fileIndex in Object.keys(fileInput.files)) {
-          let file = fileInput.files[fileIndex];
-          // console.log("index", fileIndex, "file", file);
-          formData.set(`assignment[${idx}][attatchment][${fileIndex}]`, file);
+        if (fileInput.files) {
+          for (let fileIndex in Object.keys(fileInput.files)) {
+            let file = fileInput.files[fileIndex];
+            formData.append(`attatchments`, file);
+          }
         }
+        console.log(item)
+        formData.append(
+          `assignments`,
+          JSON.stringify({
+            _id: item._id,
+            title: item.title,
+            body: item.body,
+            deadline: item.deadline,
+            attatchments_existing: item.attatchments_existing,
+            attatchmentsLength: fileInput.files.length
+          })
+        );
       });
 
-      let domain = "http://d7aebb36.ngrok.io";
-
-      fetch(domain + "/api/course", {
+      
+      if (this.update) {
+      fetch(this.domain + "/api/course/update", {
         method: "POST",
         headers: {
           // "Content-Type": "multipart/form-data"
@@ -271,10 +388,60 @@ export default {
         },
         body: formData
       })
-        .then(res => res.json())
+        .then(response => {
+            return response.json()
+          })
         .then(data => {
-          console.log(data);
+          
+          if (data.error) {
+            this.loading['save'] = false;
+            this.error['save'] = true;
+            this.errorMessage['save'] = 'Error: <small style="color:red">' + data.error + "</small>";
+          } else {
+            this.loading['save'] = false;
+            this.success['save'] = true;
+            this.successMessage['save'] = 'Success: <small style="color:green">' + data.success + "</small>";
+            this.fetchCourse(this.$route.params.id)
+          }
+          
+        }).catch((error) => {
+          this.loading['save'] = false;
+          this.error['save'] = true;
+          this.errorMessage['save'] = 'Err: ' + error.message;
         });
+      } else {
+
+      fetch(this.domain + "/api/course", {
+        method: "POST",
+        headers: {
+          // "Content-Type": "multipart/form-data"
+          // "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: formData
+      })
+        .then(response => {
+            return response.json()
+          })
+        .then(data => {
+          
+          if (data.error) {
+            this.loading['save'] = false;
+            this.error['save'] = true;
+            this.errorMessage['save'] = 'Error: <small style="color:red">' + data.error + "</small>";
+          } else {
+            this.loading['save'] = false;
+            this.success['save'] = true;
+            this.successMessage['save'] = 'Success: <small style="color:green">' + data.success + "</small>";
+            this.fetchCourses()
+          }
+          
+        }).catch((error) => {
+          this.loading['save'] = false;
+          this.error['save'] = true;
+          this.errorMessage['save'] = 'Err: ' + error.message;
+        });
+      }
+
     },
     addNewStudent() {
       if (this.course.students) {
@@ -308,9 +475,22 @@ export default {
         typeof this.course.students == "string" &&
         this.course.students.length > 0
       ) {
-        return this.course.students.split(",");
+        return this.course.students.split("\n");
       } else {
         return [];
+      }
+    },
+    filterdCourses() {
+    
+      if (typeof this.course.title === 'string' && this.course.title.length > 0 ) {
+        if (this.course.title === '*') {
+          return this.coursesTitles
+        }
+        return this.coursesTitles.filter(course => {
+          return course.courseTitle.toLowerCase().search(this.course.title.toLowerCase()) > -1
+        })
+      } else {
+        return []
       }
     }
   }

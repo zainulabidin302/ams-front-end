@@ -13,6 +13,11 @@ export default new Router({
       component: Courses
     },
     {
+      path: '/course/:id',
+      name: 'CreateCourse',
+      component: CourseCreate
+    },
+    {
       path: '/course',
       name: 'CreateCourse',
       component: CourseCreate

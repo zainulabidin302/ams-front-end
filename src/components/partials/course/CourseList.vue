@@ -1,16 +1,18 @@
 <template>
-  <div >
-    <div :class="{'course': true, 'active': selectedCourse === courseIndex }"  v-for="(course, courseIndex) in courses">
-      
-      <h2>{{course.title}} - <small>{{course.description}} </small></h2>
+  <div>
+    <div
+      :class="{'course': true, 'active': selectedCourse === courseIndex }"
+      v-for="(course, courseIndex) in assignmentList"
+    >
+      <h2>Course: {{course.courseTitle}} - Assignment: {{course.title}}</h2>
+      <router-link :to="`/course/${course._id}`">View Details</router-link>
       <br>
 
-      <b>Course By</b> {{course.instructor.name}} <a :href="'mailto:'+ course.instructor.email">{{course.instructor.email}}</a>
-      <br>
-        <em>{{course.tags.join(', ')}}</em>
-      <br>
-
-      <button @click="selectedCourse = courseIndex" v-if="selectedCourse !== courseIndex">+</button>
+      <!-- <b>Course By</b> {{course.instructor.name}} <a :href="'mailto:'+ course.instructor.email">{{course.instructor.email}}</a> -->
+      <!-- <br> -->
+      <!-- <em>{{course.tags.join(', ')}}</em> -->
+      <!-- <br> -->
+      <!-- <button @click="selectedCourse = courseIndex" v-if="selectedCourse !== courseIndex">+</button>
       <button @click="selectedCourse = -1" v-if="selectedCourse === courseIndex">-</button>
       <small><em>{{course.assignments.length}}</em> Assignments [1 due]</small>
       <br>
@@ -21,10 +23,8 @@
         <em>
           {{updatedAt(course.createdAt, course.updatedAt)}}
         </em>
-      </small>
-      
-      
-      <div :class="{'assignment': true, 'active': selectedCourse === courseIndex }" v-if="selectedCourse === courseIndex">
+      </small>-->
+      <!-- <div :class="{'assignment': true, 'active': selectedCourse === courseIndex }" v-if="selectedCourse === courseIndex">
         <hr>
         <div v-for="(assign, assignmentIndex) in course.assignments">
           <button @click="selectedAssignment = assignmentIndex" v-if="selectedAssignment !== assignmentIndex">+</button>
@@ -57,7 +57,7 @@
             <hr>
           </div>
         </div>
-      </div>
+      </div>-->
     </div>
   </div>
 </template>
@@ -66,8 +66,9 @@
 import data from "../../../data/data.js";
 import moment from "moment";
 import markdown from "markdown";
-
+import config from "../../../config.js";
 export default {
+  props: ["assignmentList"],
   methods: {
     isSelected(courseIndex) {
       return this.selectedCourse === courseIndex;
@@ -91,7 +92,8 @@ export default {
     return {
       selectedCourse: 0,
       selectedAssignment: 0,
-      courses: data
+      courses: [],
+      domain: config.apiServer
     };
   },
   computed: {
